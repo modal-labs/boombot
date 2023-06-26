@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from modal import Image, Stub, method, gpu
+from modal import Image, Stub, method, gpu, Mount
 
 stub = Stub("musicgen")
 
@@ -25,22 +25,29 @@ image = (
 stub.image = image
 
 
-@stub.cls(gpu=gpu.A100())
+@stub.cls(
+    gpu=gpu.A100(),
+    mounts=[
+        Mount.from_local_dir(
+            "/Users/rachelpark/musicmaker/assets", remote_path="/root/app/assets"
+        )
+    ],
+)
 class Audiocraft:
     def __enter__(self):
         from audiocraft.models import MusicGen
 
-        self.model = MusicGen.get_pretrained("large")
+        self.model_text = MusicGen.get_pretrained("large")
+        self.model_melody = MusicGen.get_pretrained("melody")
 
     @method()
-    def generate(self):
+    def generate(self, prompt: str, melody_path: str = ""):
         from audiocraft.data.audio_utils import i16_pcm, normalize_audio
         import soundfile as sf
         import io
         import torch
+        import torchaudio
         from pydub import AudioSegment
-
-        descriptions = ["cheerful pop", "sad rock", "soft EDM", "happy jazz"]
 
         def audio_write_to_bytes(
             wav: torch.Tensor,
@@ -95,31 +102,45 @@ class Audiocraft:
             audio_bytes.seek(0)
             return audio_bytes
 
-        self.model.set_generation_params(duration=8)
-        wav = self.model.generate(descriptions)  # generates 3 samples.
+        self.model_melody.set_generation_params(duration=8)
+        self.model_text.set_generation_params(duration=8)
+
+        if len(melody_path) == 0:
+            wav = self.model_text.generate([prompt])  # generates 3 samples.
+        else:
+            melody_waveform, sr = torchaudio.load(melody_path)
+            melody_waveform = melody_waveform.unsqueeze(0).repeat(2, 1, 1)
+            wav = self.model_melody.generate_with_chroma(
+                descriptions=[
+                    "80s pop track with bassy drums and synth",
+                    "90s rock song with loud guitars and heavy drums",
+                ],
+                melody_wavs=melody_waveform,
+                melody_sample_rate=sr,
+                progress=True,
+            )
 
         clips = []
         for one_wav in wav:
-            # Will save under {idx}.wav, with loudness normalization at -14 db LUFS.
             clips.append(
                 audio_write_to_bytes(
-                    one_wav.cpu(), self.model.sample_rate, strategy="loudness"
+                    one_wav.cpu(), self.model_text.sample_rate, strategy="loudness"
                 )
             )
         return clips
 
 
 @stub.local_entrypoint()
-def main():
-    dir = Path("/tmp/musicgen")
+def main(prompt: str, melody_path: str = ""):
+    dir = Path("/tmp/audiocraft")
     if not dir.exists():
         dir.mkdir(exist_ok=True, parents=True)
 
     audiocraft = Audiocraft()
     print("Generating clips")
-    clips = audiocraft.generate.call()
+    clips = audiocraft.generate.call(prompt, melody_path)
     for idx, clip in enumerate(clips):
-        output_path = dir / f"{idx}.wav"
+        output_path = dir / f"melody_{idx}.wav"
         print(f"Saving to {output_path}")
         with open(output_path, "wb") as f:
             f.write(clip.read())
