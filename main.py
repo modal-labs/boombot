@@ -1,13 +1,16 @@
 from pathlib import Path
 
-from modal import Image, Stub, method, gpu, Mount
+from fastapi import FastAPI
+from modal import Image, Stub, method, gpu, Mount, asgi_app
 
 stub = Stub("musicgen")
+web_app = FastAPI()
 
 
 def download_model():
     from audiocraft.models import MusicGen
 
+    MusicGen.get_pretrained("melody")
     MusicGen.get_pretrained("large")
 
 
@@ -106,15 +109,12 @@ class Audiocraft:
         self.model_text.set_generation_params(duration=8)
 
         if len(melody_path) == 0:
-            wav = self.model_text.generate([prompt])  # generates 3 samples.
+            wav = self.model_text.generate([prompt])
         else:
             melody_waveform, sr = torchaudio.load(melody_path)
             melody_waveform = melody_waveform.unsqueeze(0).repeat(2, 1, 1)
             wav = self.model_melody.generate_with_chroma(
-                descriptions=[
-                    "80s pop track with bassy drums and synth",
-                    "90s rock song with loud guitars and heavy drums",
-                ],
+                descriptions=[prompt],
                 melody_wavs=melody_waveform,
                 melody_sample_rate=sr,
                 progress=True,
@@ -130,6 +130,33 @@ class Audiocraft:
         return clips
 
 
+@stub.function()
+@asgi_app()
+def web():
+    from fastapi import FastAPI, Request
+    from fastapi.responses import StreamingResponse
+    import io
+
+    web_app = FastAPI()
+    audiocraft = Audiocraft()
+
+    @web_app.post("/generate")
+    async def generate(request: Request):
+        body = await request.json()
+        prompt = body["prompt"]
+
+        clips = audiocraft.generate.call(prompt)
+
+        clip = clips[0]
+        response = StreamingResponse(
+            io.BytesIO(clip.getvalue()), media_type="audio/wav"
+        )
+
+        return response
+
+    return web_app
+
+
 @stub.local_entrypoint()
 def main(prompt: str, melody_path: str = ""):
     dir = Path("/tmp/audiocraft")
@@ -140,7 +167,7 @@ def main(prompt: str, melody_path: str = ""):
     print("Generating clips")
     clips = audiocraft.generate.call(prompt, melody_path)
     for idx, clip in enumerate(clips):
-        output_path = dir / f"melody_{idx}.wav"
+        output_path = dir / f"country_{idx}.wav"
         print(f"Saving to {output_path}")
         with open(output_path, "wb") as f:
             f.write(clip.read())
