@@ -3,6 +3,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from modal import Image, Stub, method, gpu, Mount, asgi_app
 
+MODEL_DIR = "/model"
+
 stub = Stub("musicgen")
 web_app = FastAPI()
 
@@ -40,8 +42,8 @@ class Audiocraft:
     def __enter__(self):
         from audiocraft.models import MusicGen
 
-        self.model_text = MusicGen.get_pretrained("large")
         self.model_melody = MusicGen.get_pretrained("melody")
+        self.model_large = MusicGen.get_pretrained("large")
 
     @method()
     def generate(self, prompt: str, melody_path: str = ""):
@@ -106,25 +108,28 @@ class Audiocraft:
             return audio_bytes
 
         self.model_melody.set_generation_params(duration=8)
-        self.model_text.set_generation_params(duration=8)
+        self.model_large.set_generation_params(duration=10)
 
         if len(melody_path) == 0:
-            wav = self.model_text.generate([prompt])
+            wav = self.model_large.generate([prompt])
         else:
             melody_waveform, sr = torchaudio.load(melody_path)
             melody_waveform = melody_waveform.unsqueeze(0).repeat(2, 1, 1)
-            wav = self.model_melody.generate_with_chroma(
-                descriptions=[prompt],
-                melody_wavs=melody_waveform,
-                melody_sample_rate=sr,
-                progress=True,
+            # wav = self.model_melody.generate_with_chroma(
+            #     descriptions=[prompt],
+            #     melody_wavs=melody_waveform,
+            #     melody_sample_rate=sr,
+            #     progress=True,
+            # )
+            wav = self.model_melody.generate_continuation(
+                prompt=melody_waveform, prompt_sample_rate=sr
             )
 
         clips = []
         for one_wav in wav:
             clips.append(
                 audio_write_to_bytes(
-                    one_wav.cpu(), self.model_text.sample_rate, strategy="loudness"
+                    one_wav.cpu(), self.model_large.sample_rate, strategy="loudness"
                 )
             )
         return clips
@@ -135,10 +140,19 @@ class Audiocraft:
 def web():
     from fastapi import FastAPI, Request
     from fastapi.responses import StreamingResponse
+    from fastapi.middleware.cors import CORSMiddleware
     import io
 
     web_app = FastAPI()
     audiocraft = Audiocraft()
+
+    web_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @web_app.post("/generate")
     async def generate(request: Request):
@@ -167,7 +181,7 @@ def main(prompt: str, melody_path: str = ""):
     print("Generating clips")
     clips = audiocraft.generate.call(prompt, melody_path)
     for idx, clip in enumerate(clips):
-        output_path = dir / f"country_{idx}.wav"
+        output_path = dir / f"field_{idx}.wav"
         print(f"Saving to {output_path}")
         with open(output_path, "wb") as f:
             f.write(clip.read())
