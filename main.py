@@ -8,7 +8,7 @@ MAX_SEGMENT_DURATION = 30
 stub = Stub("boombot")
 
 
-def download_model():
+def download_models():
     from audiocraft.models import MusicGen
 
     MusicGen.get_pretrained("large")
@@ -25,7 +25,7 @@ image = (
         "pydub",
         "git+https://github.com/facebookresearch/audiocraft.git",
     )
-    .run_function(download_model, gpu="any")
+    .run_function(download_models, gpu="any")
 )
 stub.image = image
 
