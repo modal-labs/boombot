@@ -1,40 +1,83 @@
 from fastapi import Request, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from threading import Thread
-
 import os
-from main import stub, Audiocraft
-
-from modal import Secret, asgi_app
-
 import aiohttp
 import json
 import io
 
+from modal import Secret, asgi_app
 
-async def send_file_to_endpoint(
-    file: io.BytesIO,
+from main import stub, Audiocraft
+
+
+async def send_file(
+    output: io.BytesIO,
     prompt: str,
     application_id: str,
     interaction_token: str,
     user_id: str,
     format: str,
+    melody: io.BytesIO = None,
 ):
     interaction_url = (
         f"https://discord.com/api/v10/webhooks/{application_id}/{interaction_token}"
     )
-    json_payload = {"content": f"<@{user_id}> {prompt}", "tts": False}
+    output_filename = f"output.{format}"
+    melody_filename = f"original_melody.{format}" if melody else None
+
+    if melody:
+        json_payload = {
+            "content": f"<@{user_id}> {prompt}",
+            "tts": False,
+            "attachments": [
+                {"id": 0, "description": "Output file", "filename": output_filename},
+                {
+                    "id": 1,
+                    "description": "Original Melody",
+                    "filename": melody_filename,
+                },
+            ],
+        }
+    else:
+        json_payload = {
+            "content": f"<@{user_id}> {prompt}",
+            "tts": False,
+            "attachments": [
+                {"id": 0, "description": "Output file", "filename": output_filename},
+            ],
+        }
 
     payload = aiohttp.FormData()
     payload.add_field(
         "payload_json", json.dumps(json_payload), content_type="application/json"
     )
     payload.add_field(
-        "file", file, filename=f"output.{format}", content_type=f"audio/{format}"
+        "files[0]",
+        output,
+        filename=output_filename,
+        content_type=f"audio/{format}",
     )
+    if melody:
+        payload.add_field(
+            "files[1]",
+            melody,
+            filename=melody_filename,
+            content_type=f"audio/{format}",
+        )
 
     async with aiohttp.ClientSession() as session:
         async with session.post(interaction_url, data=payload) as resp:
+            print(await resp.text())
+
+
+async def send_error(
+    application_id: str, interaction_token: str, error_message: str = ""
+):
+    interaction_url = f"https://discord.com/api/v10/webhooks/{application_id}/{interaction_token}/messages/@original"
+    json_payload = {"content": error_message, "tts": False}
+    async with aiohttp.ClientSession() as session:
+        async with session.patch(interaction_url, json=json_payload) as resp:
             print(await resp.text())
 
 
@@ -60,26 +103,49 @@ def app():
         user_id: str,
         duration: int,
         format: str,
+        melody_url: str,
     ):
-        audiocraft = Audiocraft()
-        clip = audiocraft.generate.call(prompt, duration=duration, format=format)
-        await send_file_to_endpoint(
-            clip, prompt, application_id, interaction_token, user_id, format
-        )
+        try:
+            audiocraft = Audiocraft()
+            melody_clip, clip = audiocraft.generate.call(
+                prompt, duration=duration, format=format, melody_url=melody_url
+            )
+            await send_file(
+                clip,
+                prompt,
+                application_id,
+                interaction_token,
+                user_id,
+                format,
+                melody=melody_clip,
+            )
+        except ValueError as e:
+            error_message = "*Sorry, an error occured while generating your audio. Please check the format of your melody file.*"
+            await send_error(application_id, interaction_token, error_message)
+        except Exception as e:
+            error_message = "*Sorry, an error occured while generating your audio. Please try again in a bit.*"
+            await send_error(application_id, interaction_token, error_message)
 
-    def generate_clip_wrapper(
+    def generate_clip_wrapper(  # for new thread
         prompt: str,
         application_id: str,
         interaction_token: str,
         user_id: str,
         duration: int,
         format: str,
+        melody_url: str,
     ):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.run_until_complete(
             generate_clip(
-                prompt, application_id, interaction_token, user_id, duration, format
+                prompt,
+                application_id,
+                interaction_token,
+                user_id,
+                duration,
+                format,
+                melody_url,
             )
         )
         loop.close()
@@ -96,8 +162,6 @@ def app():
         timestamp = request.headers.get("X-Signature-Timestamp")
         body = await request.body()
 
-        print(body)
-
         message = timestamp.encode() + body
         try:
             verify_key.verify(message, bytes.fromhex(signature))
@@ -111,6 +175,7 @@ def app():
         if data.get("type") == 2:  # triggered by slash command interaction
             duration = 10
             format = "wav"
+            melody_url = ""
 
             options = data["data"]["options"]
             for option in options:
@@ -121,6 +186,12 @@ def app():
                     duration = option["value"]
                 elif name == "format":
                     format = option["value"]
+            if "resolved" in data["data"]:
+                for attachment in data["data"]["resolved"]["attachments"]:
+                    melody_url = data["data"]["resolved"]["attachments"][
+                        f"{attachment}"
+                    ]["url"]
+
             app_id = data["application_id"]
             interaction_token = data["token"]
             user_id = data["member"]["user"]["id"]
@@ -134,6 +205,7 @@ def app():
                     user_id,
                     duration,
                     format,
+                    melody_url,
                 ),
             )
             thread.start()
