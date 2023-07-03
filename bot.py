@@ -1,14 +1,18 @@
 from fastapi import Request, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from threading import Thread
 import os
 import aiohttp
 import json
 import io
+from pathlib import Path
 
-from modal import Secret, asgi_app
+from modal import Secret, asgi_app, Mount
 
 from main import stub, Audiocraft
+
+static_path = Path(__file__).parent / "frontend"
 
 
 async def send_file(
@@ -81,14 +85,18 @@ async def send_error(
             print(await resp.text())
 
 
-@stub.function(secrets=[Secret.from_name("boombot-discord-secret")], keep_warm=1)
+@stub.function(
+    mounts=[Mount.from_local_dir(static_path, remote_path="/assets")],
+    secrets=[Secret.from_name("boombot-discord-secret")],
+    keep_warm=1,
+)
 @asgi_app()
 def app():
     import asyncio
 
-    fastapi_app = FastAPI()
+    app = FastAPI()
 
-    fastapi_app.add_middleware(
+    app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
         allow_credentials=True,
@@ -150,7 +158,7 @@ def app():
         )
         loop.close()
 
-    @fastapi_app.post("/")
+    @app.post("/generate")
     async def generate_from_command(request: Request):
         from nacl.signing import VerifyKey
         from nacl.exceptions import BadSignatureError
@@ -216,4 +224,6 @@ def app():
 
         raise HTTPException(status_code=400, detail="Bad request")
 
-    return fastapi_app
+    app.mount("/", StaticFiles(directory="/assets", html=True))
+
+    return app
