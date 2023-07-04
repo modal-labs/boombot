@@ -1,26 +1,4 @@
 function App() {
-  async function handleSubmit(e) {
-    e.preventDefault();
-    try {
-      const response = await fetch('/generate', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          "prompt": prompt
-        })
-      });
-      if (response.status === 200) {
-        const arrayBuffer = await response.arrayBuffer();
-        const blob = new Blob([arrayBuffer], {type: 'audio/wav'});
-        const objectURL = URL.createObjectURL(blob);
-        setAudioUrl(objectURL); // update audioUrl state
-        console.log(audioUrl)
-      }
-    } catch(error) {
-      console.error('Error:', error);
-    }
-  }
-
   return (
     <div class="relative min-w-full min-h-screen absolute inset-0 bg-[#161618]">
         <main class="w-full flex flex-col items-center">
