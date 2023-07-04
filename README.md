@@ -2,7 +2,7 @@
 
 BoomBot is a Discord bot that generates music samples in seconds using [MusicGen](https://github.com/facebookresearch/audiocraft). See the demo live [here](https://rachelspark--boombot-app-dev.modal.run/). You can try BoomBot out for yourself by joining the Discord server [here](https://discord.gg/CBekEF42) and typing `/generate` in the `#general` channel.
 
-![demo](https://github.com/modal-labs/boombot/blob/main/fast-boombot-demo.gif)
+<img src="/fast-boombot-demo.gif" width="500" height="auto"/>
 
 This entire app, from the backend API to the web app, is deployed serverlessly on [Modal](https://modal.com/).
 
