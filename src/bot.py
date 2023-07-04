@@ -1,7 +1,6 @@
 from fastapi import Request, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from threading import Thread
 import os
 import aiohttp
 import json
@@ -85,6 +84,38 @@ async def send_error(
             print(await resp.text())
 
 
+@stub.function()
+async def generate_audio(
+    prompt: str,
+    application_id: str,
+    interaction_token: str,
+    user_id: str,
+    duration: int,
+    format: str,
+    melody_url: str,
+):
+    try:
+        audiocraft = Audiocraft()
+        melody_clip, clip = audiocraft.generate.call(
+            prompt, duration=duration, format=format, melody_url=melody_url
+        )
+        await send_file(
+            clip,
+            prompt,
+            application_id,
+            interaction_token,
+            user_id,
+            format,
+            melody=melody_clip,
+        )
+    except ValueError as e:
+        error_message = "*Sorry, an error occured while generating your audio. Please check the format of your melody file.*"
+        await send_error(application_id, interaction_token, error_message)
+    except Exception as e:
+        error_message = "*Sorry, an error occured while generating your audio. Please try again in a bit.*"
+        await send_error(application_id, interaction_token, error_message)
+
+
 @stub.function(
     mounts=[Mount.from_local_dir(static_path, remote_path="/assets")],
     secrets=[Secret.from_name("boombot-discord-secret")],
@@ -103,60 +134,6 @@ def app():
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    async def generate_clip(
-        prompt: str,
-        application_id: str,
-        interaction_token: str,
-        user_id: str,
-        duration: int,
-        format: str,
-        melody_url: str,
-    ):
-        try:
-            audiocraft = Audiocraft()
-            melody_clip, clip = audiocraft.generate.call(
-                prompt, duration=duration, format=format, melody_url=melody_url
-            )
-            await send_file(
-                clip,
-                prompt,
-                application_id,
-                interaction_token,
-                user_id,
-                format,
-                melody=melody_clip,
-            )
-        except ValueError as e:
-            error_message = "*Sorry, an error occured while generating your audio. Please check the format of your melody file.*"
-            await send_error(application_id, interaction_token, error_message)
-        except Exception as e:
-            error_message = "*Sorry, an error occured while generating your audio. Please try again in a bit.*"
-            await send_error(application_id, interaction_token, error_message)
-
-    def generate_clip_wrapper(  # for new thread
-        prompt: str,
-        application_id: str,
-        interaction_token: str,
-        user_id: str,
-        duration: int,
-        format: str,
-        melody_url: str,
-    ):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(
-            generate_clip(
-                prompt,
-                application_id,
-                interaction_token,
-                user_id,
-                duration,
-                format,
-                melody_url,
-            )
-        )
-        loop.close()
 
     @app.post("/generate")
     async def generate_from_command(request: Request):
@@ -204,19 +181,9 @@ def app():
             interaction_token = data["token"]
             user_id = data["member"]["user"]["id"]
 
-            thread = Thread(
-                target=generate_clip_wrapper,
-                args=(
-                    prompt,
-                    app_id,
-                    interaction_token,
-                    user_id,
-                    duration,
-                    format,
-                    melody_url,
-                ),
+            generate_audio.spawn(
+                prompt, app_id, interaction_token, user_id, duration, format, melody_url
             )
-            thread.start()
 
             return {
                 "type": 5,  # respond immediately with defer message
