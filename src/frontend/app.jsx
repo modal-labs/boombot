@@ -8,7 +8,7 @@ function App() {
             <div className="text-5xl md:text-7xl font-bold text-white p-2">boombot</div>
             <div className="w-1/2 text-lg text-white p-8 pb-12 mx-10 text-center whitespace-pre-wrap">Create any music you want, with a simple text prompt.
 
-            Join the Discord community and explore the limits of <a className="text-white hover:underline" target="_blank" rel="noopener noreferref" href="https://github.com/facebookresearch/audiocraft">
+            Join the Discord community and explore the power of <a className="text-white hover:underline" target="_blank" rel="noopener noreferref" href="https://github.com/facebookresearch/audiocraft">
             MusicGen.</a></div>
             <a target="_blank" rel="noopener noreferref" href="https://discord.gg/CBekEF42">
                 <button className="bg-[#9AEE86] py-4 px-6 font-bold text-zinc-900 text-xl rounded hover:bg-[#b8fca7]">Try it out</button>

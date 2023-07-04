@@ -10,7 +10,7 @@ from pathlib import Path
 
 from modal import Secret, asgi_app, Mount
 
-from main import stub, Audiocraft
+from src.main import stub, Audiocraft
 
 static_path = Path(__file__).parent / "frontend"
 
