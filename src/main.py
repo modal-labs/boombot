@@ -34,7 +34,7 @@ if stub.is_inside():
     import torchaudio
 
 
-@stub.cls(gpu=gpu.A10G(), keep_warm=1)
+@stub.cls(gpu=gpu.A10G())
 class Audiocraft:
     def __enter__(self):
         from audiocraft.models import MusicGen

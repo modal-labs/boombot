@@ -119,7 +119,6 @@ async def generate_audio(
 @stub.function(
     mounts=[Mount.from_local_dir(static_path, remote_path="/assets")],
     secrets=[Secret.from_name("boombot-discord-secret")],
-    keep_warm=1,
 )
 @asgi_app()
 def app():
@@ -135,7 +134,7 @@ def app():
         allow_headers=["*"],
     )
 
-    @app.post("/generate")
+    @app.post("/")
     async def generate_from_command(request: Request):
         from nacl.signing import VerifyKey
         from nacl.exceptions import BadSignatureError
