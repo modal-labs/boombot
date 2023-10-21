@@ -96,7 +96,7 @@ async def generate_audio(
 ):
     try:
         audiocraft = Audiocraft()
-        melody_clip, clip = audiocraft.generate.call(
+        melody_clip, clip = audiocraft.generate.remote(
             prompt, duration=duration, format=format, melody_url=melody_url
         )
         await send_file(
