@@ -11,8 +11,8 @@ stub = Stub("boombot")
 def download_models():
     from audiocraft.models import MusicGen
 
-    MusicGen.get_pretrained("large")
-    MusicGen.get_pretrained("melody")
+    MusicGen.get_pretrained("facebook/musicgen-large")
+    MusicGen.get_pretrained("facebook/musicgen-melody")
 
 
 image = (
@@ -39,8 +39,8 @@ class Audiocraft:
     def __enter__(self):
         from audiocraft.models import MusicGen
 
-        self.model_large = MusicGen.get_pretrained("large")
-        self.model_melody = MusicGen.get_pretrained("melody")
+        self.model_large = MusicGen.get_pretrained("facebook/musicgen-large")
+        self.model_melody = MusicGen.get_pretrained("facebook/musicgen-melody")
 
     # modified audiocraft.audio_write() to return bytes
     def audio_write_to_bytes(
@@ -205,7 +205,7 @@ def main(prompt: str, duration: int = 10, format: str = "wav", melody: str = "")
         dir.mkdir(exist_ok=True, parents=True)
 
     audiocraft = Audiocraft()
-    melody_clip, clip = audiocraft.generate.call(
+    melody_clip, clip = audiocraft.generate.remote(
         prompt, duration=duration, format=format, melody_url=melody
     )
 
