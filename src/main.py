@@ -1,7 +1,7 @@
 from pathlib import Path
 import io
 
-from modal import Image, Stub, method, gpu, asgi_app
+from modal import Image, Stub, method, gpu
 
 MAX_SEGMENT_DURATION = 30
 
@@ -16,20 +16,20 @@ def download_models():
 
 
 image = (
-    Image.debian_slim()
+    Image.debian_slim(python_version="3.11")
     .apt_install("git", "ffmpeg")
+    .pip_install("torch==2.1.1")
     .pip_install(
-        "pynacl",
-        "torch",
-        "soundfile",
-        "pydub",
-        "git+https://github.com/facebookresearch/audiocraft.git",
+        "pynacl==1.5.0",
+        "soundfile==0.12.1",
+        "pydub==0.25.1",
+        "git+https://github.com/facebookresearch/audiocraft.git@v1.1.0",
     )
     .run_function(download_models, gpu="any")
 )
 stub.image = image
 
-if stub.is_inside():
+with image.run_inside():
     import torch
     import torchaudio
 
@@ -39,8 +39,8 @@ class Audiocraft:
     def __enter__(self):
         from audiocraft.models import MusicGen
 
-        self.model_large = MusicGen.get_pretrained("facebook/musicgen-large")
-        self.model_melody = MusicGen.get_pretrained("facebook/musicgen-melody")
+        self.model_large = MusicGen.get_pretrained("large")
+        self.model_melody = MusicGen.get_pretrained("melody")
 
     # modified audiocraft.audio_write() to return bytes
     def audio_write_to_bytes(

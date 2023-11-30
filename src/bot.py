@@ -9,7 +9,7 @@ from pathlib import Path
 
 from modal import Secret, asgi_app, Mount
 
-from src.main import stub, Audiocraft
+from .main import stub, Audiocraft
 
 static_path = Path(__file__).parent / "frontend"
 
@@ -122,8 +122,6 @@ async def generate_audio(
 )
 @asgi_app()
 def app():
-    import asyncio
-
     app = FastAPI()
 
     app.add_middleware(
