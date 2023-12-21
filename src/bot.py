@@ -132,7 +132,7 @@ def app():
         allow_headers=["*"],
     )
 
-    @app.post("/")
+    @app.post("/generate")
     async def generate_from_command(request: Request):
         from nacl.signing import VerifyKey
         from nacl.exceptions import BadSignatureError
