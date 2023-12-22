@@ -119,6 +119,7 @@ async def generate_audio(
 @stub.function(
     mounts=[Mount.from_local_dir(static_path, remote_path="/assets")],
     secrets=[Secret.from_name("boombot-discord-secret")],
+    keep_warm=1,  # eliminates risk of container startup making discord ack time too long
 )
 @asgi_app()
 def app():
