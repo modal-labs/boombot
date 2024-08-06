@@ -1,7 +1,7 @@
 from pathlib import Path
 import io
 
-from modal import Image, Stub, method, gpu
+from modal import Image, Stub, method, gpu, enter
 
 MAX_SEGMENT_DURATION = 30
 
@@ -29,14 +29,15 @@ image = (
 )
 stub.image = image
 
-with image.run_inside():
+with image.imports():
     import torch
     import torchaudio
 
 
 @stub.cls(gpu=gpu.A10G())
 class Audiocraft:
-    def __enter__(self):
+    @enter()
+    def init(self):
         from audiocraft.models import MusicGen
 
         self.model_large = MusicGen.get_pretrained("large")
